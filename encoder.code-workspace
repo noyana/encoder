@@ -4,5 +4,30 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"sqltools.connections": [],
+		"sqltools.useNodeRuntime": true
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Python: Human finder",
+				"type": "python",
+				"request": "launch",
+				"program": "./human_finder.py",
+				"args": [
+					"-i X:\\Diziler\\summersoderstrom"
+				],
+				"console": "integratedTerminal"
+			},
+			{
+				"name": "PowerShell: Launch Current File",
+				"type": "PowerShell",
+				"request": "launch",
+				"script": "${file}",
+				"cwd": "${file}"
+			}
+		]
+	}
 }

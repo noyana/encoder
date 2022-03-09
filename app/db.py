@@ -8,7 +8,7 @@ from sqlalchemy import Column, Table, ForeignKey, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql.sqltypes import BigInteger, Boolean, Float, Text, Integer, String, DateTime, Boolean, Numeric
 
-engine = db.create_engine("sqlite:///files.sqlite3")
+engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
 meta = MetaData()
 
 Base = declarative_base()

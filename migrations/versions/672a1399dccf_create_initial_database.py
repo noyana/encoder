@@ -89,7 +89,7 @@ def upgrade():
                     )
     #op.create_index('ix_people_name', 'people', ['name'], unique=True)
     op.create_table('tags_people',
-                    sa.Column('id', sa.INTEGER(), nullable=False),
+                    sa.Column('id', sa.INTEGER(), nullable=False, primary_key=True, autoincrement=True),
                     sa.Column('person_id', sa.INTEGER(), sa.ForeignKey('people.id')),
                     sa.Column('tag_id', sa.INTEGER(), sa.ForeignKey('tags.id')),
                     )
