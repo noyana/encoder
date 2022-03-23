@@ -1,21 +1,25 @@
+from datetime import datetime
+from config import *
+from models import *
+from tqdm import tqdm
+from sqlalchemy.orm import Session, session
+from sqlalchemy.ext.automap import automap_base
+import sqlalchemy as db
+import sqlite3database
 import os
 import re
+import json
+import requests
+import slugify
 
-import sqlite3database
-import sqlalchemy as db
-from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.orm import Session, session
-from tqdm import tqdm
-from models import *
-from config import *
 
 Base = automap_base()
 engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
 Base.prepare(engine, reflect=True)
-session = Session(engine)
+maintain_session = Session(engine)
 
-my_list = sorted(os.scandir(all_files), key=os.path.getmtime, reverse=False)
-for raw_file in tqdm(my_list):
+""
+for raw_file in tqdm(sorted(os.scandir(all_files), key=os.path.getmtime, reverse=False)):
     # print(raw_file.path)
     (new_name, new_tags, new_file_count, new_people, new_is_movie) = Video.get_video_info(raw_file.path)
     org_name = new_name
@@ -25,76 +29,18 @@ for raw_file in tqdm(my_list):
     if (not 'a' in new_tags) and (not 'na' in new_tags):
         new_tags.append('a')
 
-    if re.search('Muslim', new_name) and not 'mu' in new_tags:
-        new_tags.append('mu')
-    elif (re.search('Dredd', new_name) or re.search('Ana Foxxx', new_name) or re.search('Zaawaadi', new_name) or re.search('Kira Noir', new_name)) and not 'b' in new_tags:
-        new_tags.append('b')
-    elif (re.search('Dredd', new_name)) and not 'bbc' in new_tags:
-        new_tags.append('bbc')
-    elif (re.search('Thai', new_name) or re.search('Alexis Tae', new_name)) and not 'as' in new_tags:
-        new_tags.append('as')
-    elif (re.search('Dellai', new_name) or re.search('Twin', new_name) or re.search(' Zee', new_name) or re.search('Joey White', new_name) or re.search('Sami White', new_name)) and not ('tw' in new_tags or 'ss' in new_tags):
-        new_tags.append('tw')
-        new_tags.append('ss')
-    elif (not re.search('Dredd', new_name)) and len(new_people) == 2 and not 'ffm' in new_tags:
-        new_tags.append('ffm')
-    elif (not re.search('Dredd', new_name)) and len(new_people) == 3 and not 'gr' in new_tags:
-        new_tags.append('gr')
-    elif re.search('TS ', new_name) and not 'ts' in new_tags:
-        new_tags.append('ts')
-        new_name.replace('TS ', '')
-    elif re.search('Bi ', new_name) and not 'bi' in new_tags:
-        new_tags.append('bi')
     for fv in new_people:
-        if fv in populars and not 'fv' in new_tags:
-            new_tags.append('fv')
-        if fv in ['Angela White', 'Angel Wicky', 'Lena Paul', 'Gabbie Carter', 'Savannah Bond', 'Joanna Angel', 'Kitana Lure', 'Phoenix Marie', 'Alison Tyler', 'Anissa Kate', 'Blanche Bradburry', 'Bridgette B', 'Ivy Lebelle', 'Jasmine Jae', 'Jolee Love', 'Lasirena69', 'Stella Cox', 'Taylee Wood', 'Veronica Avluv'] and not 'bu' in new_tags:
-            new_tags.append('bu')
-        if fv in ['Angela White', 'Angel Wicky', 'Lena Paul', 'Joanna Angel', 'Kitana Lure', 'Phoenix Marie', 'Alison Tyler', 'Anissa Kate', 'Blanche Bradburry', 'Bridgette B', 'Jasmine Jae', 'Veronica Avluv'] and not 'mi' in new_tags:
-            new_tags.append('mi')
-        if fv in ['Megan Rain', 'Marley Brinx', 'Charlotte Satre', 'Cherry Kiss', 'Adria Rae', 'AJ Applegate', 'Samantha Rone', 'Emily Willis', 'Eveline Dellai', 'Silvia Dellai', 'Gia Derza', 'Holly Hendrix', 'Ivana Sugar', 'Riley Reid', 'Selvaggia'] and not 'st' in new_tags:
-            new_tags.append('st')
-        if fv in ['Anissa Kate', 'Anna Polina', 'Clea Gaultier'] and not 'fr' in new_tags:
-            new_tags.append('fr')
-        if fv in ['Tina Kay'] and not 'uk' in new_tags:
-            new_tags.append('uk')
-        if fv in ['Emily Willis', 'Angela White', 'Jolee Love', 'Marley Brinx', 'Megan Rain'] and not 'br' in new_tags:
-            new_tags.append('br')
-        if fv in ['Angela White', 'Jolee Love'] and not 'br' in new_tags:
-            new_tags.append('br')
+        for my_key, my_list in tags_distro.items():
+            if fv in my_list and not my_key in new_tags:
+                new_tags.append(my_key)
     new_tags = list(set(new_tags))
     new_tags.sort()
-    # if new_people != org_people or new_tags != org_tags or new_name != org_name:
-    if True:
-        newest_name = Video.name_sort(new_name, new_tags, new_file_count, new_people, new_is_movie)
-        os.rename(raw_file.path, f"{all_files}{os.path.sep}{newest_name}")
+    newest_name = Video.name_sort(new_name, new_tags, new_file_count, new_people, new_is_movie)
+    os.rename(raw_file.path, f"{all_files}{os.path.sep}{newest_name}")
 
-for person in tqdm(session.query(Person).all()):
-    if person.name in ['Emily Willis', 'Angela White', 'Jolee Love', 'Marley Brinx', 'Megan Rain', 'Adriana Chechik', 'Adria Rae', 'Alison Tyler', 'Anissa Kate', 'Ania Kinski', 'Anna De Ville', 'Anna Polina', 'Avil Love', 'Bella Rolland', 'Billie Star', 'Eliza Ibarra', 'Casey Calvert', 'Charlotte Sartre', 'Eliza Ibarra', 'Francesca Le', 'Franceska Jaimes', 'Francys Belle', 'Holly Hendrix', 'Ivy Lebelle', 'Jane Wilde', 'Jasmine Jae', 'Kira Noir', 'Lady Dee', 'Lady Gang', 'Lana Rhoades', 'Lasirena69', 'Maddy May', 'Maria Visconti', 'Monika Wild', 'Nicole Black', 'Nicole Love', 'Sandra Zee', 'Lady Zee', 'Sasha Rose'] and not 'br' in person.default_tags:
-        person.default_tags.append('br')
-    if person.name in ['AJ Applegate', 'Angel Wicky', 'Blanche Bradburry', 'Brittany Bardot', 'Candice Dare', 'Cherie Deville', 'Cherry Kiss', 'Cory Chase', 'Dee Williams', 'Florane Russel', 'Haley Reed', 'Ivana Sugar', 'Jillian Janson', 'Kate England', 'Kira Thorn', 'Kristy Black', 'Lola Taylor', 'London River', 'Manuela Rubi', 'Nikyta Rubi', 'Natalia Starr', 'Nathaly Cherie', 'Paige Owens', 'Phoenix Marie', 'Rebecca Volpetti', 'Rebel Rhyder', 'Ria Sunn', 'Samantha Rone', 'Selvaggia'] and not 'bl' in person.default_tags:
-        person.default_tags.append('bl')
-    if person.name in ['Dredd'] and not 'bbc' in person.default_tags:
-        person.default_tags.append('bbc')
-    if person.name in ['Tina Kay', 'Candice Dare', 'Kate England', 'London River'] and not 'uk' in person.default_tags:
-        person.default_tags.append('uk')
-    if person.name in populars and not 'fv' in person.default_tags:
-        person.default_tags.append('fv')
-    if person.name in ['Angela White', 'Angel Wicky', 'Lena Paul', 'Gabbie Carter', 'Savannah Bond', 'Joanna Angel', 'Kitana Lure', 'Phoenix Marie', 'Alison Tyler', 'Anissa Kate', 'Blanche Bradburry', 'Bridgette B', 'Ivy Lebelle', 'Jasmine Jae', 'Jolee Love', 'Lasirena69', 'Stella Cox', 'Taylee Wood', 'Veronica Avluv', 'Billie Star', 'Brittany Bardot', 'Dee Williams', 'Chloe Lamour', 'Florane Russel', 'Francesca Le', 'Franceska Jaimes', 'Jasmine Jae', 'Keisha Grey', 'Lana Rhoades', 'Liya Silver', 'London River', 'Manuela Rubi', 'Nikyta Rubi', 'Maria Visconti', 'Nathaly Cherie'] and not 'bu' in person.default_tags:
-        person.default_tags.append('bu')
-    if person.name in ['Angela White', 'Angel Wicky', 'Lena Paul', 'Joanna Angel', 'Kitana Lure', 'Phoenix Marie', 'Alison Tyler', 'Anissa Kate', 'Blanche Bradburry', 'Bridgette B', 'Jasmine Jae', 'Veronica Avluv', 'Ania Kinski', 'Brittany Bardot', 'Cherie Deville', 'Cory Chase', 'Dee Williams', 'Francesca Le', 'Lauren Phillips', 'London River', 'Nathaly Cherie'] and not 'mi' in person.default_tags:
-        person.default_tags.append('mi')
-    if person.name in ['Megan Rain', 'Marley Brinx', 'Charlotte Satre', 'Cherry Kiss', 'Adria Rae', 'AJ Applegate', 'Samantha Rone', 'Emily Willis', 'Eveline Dellai', 'Silvia Dellai', 'Gia Derza', 'Holly Hendrix', 'Ivana Sugar', 'Riley Reid', 'Selvaggia', 'AJ Applegate', 'Anna De Ville', 'Avi Love', 'Candice Dare', 'Casey Calvert', 'Charlotte Sartre', 'Francys Belle', 'Haley Reed', 'Holly Hendrix', 'Ivana Sugar', 'Jane Wilde', 'Jillian Janson', 'Kira Noir', 'Kira Thorn', 'Korra Del Rio', 'Kristy Black', 'Lady Dee', 'Lola Taylor', 'Monika Wild', 'Nicole Black', 'Paige Owens', 'Rebecca Volpetti', 'Sandra Zee', 'Lady Zee', 'Sasha Rose', 'Selvaggia'] and not 'st' in person.default_tags:
-        person.default_tags.append('st')
-    if person.name in ['Anissa Kate', 'Anna Polina', 'Clea Gaultier', 'Ania Kinski'] and not 'fr' in person.default_tags:
-        person.default_tags.append('fr')
-    if person.name in ['Cherry Kiss', 'Kitana Lure', 'Ivana Sugar', 'Lola Taylor', 'Maria Visconti', 'Natalia Starr', 'Sasha Rose'] and not 'ru' in person.default_tags:
-        person.default_tags.append('ru')
-    if person.name in ['Eveline Dellai', 'Silvia Dellai', 'Joey White', 'Sami White', 'Sandra Zee', 'Lady Zee', 'Manuela Rubi', 'Nikyta Rubi'] and not 'ss' in person.default_tags:
-        person.default_tags.append('ss')
-    if person.name in ['Korra Del Rio', 'Aubrey Kate', 'Chanel Santini', 'Daisy Taylor', 'Emma Rose'] and not 'ts' in person.default_tags:
-        person.default_tags.append('ts')
-session.commit()
+# if person.name in my_list and not my_key in person.default_tags.split(','):
+##        person.default_tags += ',' + my_key
+# maintain_session.commit()
 
 """
 fn_bare = "No Ay.mp4"
@@ -150,7 +96,6 @@ def gc(fn):
     else:
         is_movie = True
     return (name, tags, count, people, is_movie)
-
 
 print(f"{fn_bare} -> {gc(fn_bare)}")
 print(f"{fn_num} -> {gc(fn_num)}")

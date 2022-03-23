@@ -6,5 +6,5 @@ __pycache__/config.cpython-39.pyc
 __pycache__/config.cpython-310.pyc
 __pycache__/models.cpython-39.pyc
 __pycache__/models.cpython-310.pyc
-ffmpeg.exe
-ffprobe.exe
+*.exe
+*.log

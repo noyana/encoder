@@ -2,6 +2,9 @@ import os
 import re
 from datetime import datetime
 from sys import platform
+from tkinter import Label
+
+from numpy import delete
 from config import *
 
 import ffmpeg
@@ -10,14 +13,11 @@ import sqlite3database
 from sqlalchemy import Column, ForeignKey, MetaData, Table, select
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
-from sqlalchemy.sql.sqltypes import (BigInteger, Boolean, DateTime, Float,
-                                     Integer, Numeric, String, Text)
+from sqlalchemy.sql.sqltypes import BigInteger, Boolean, DateTime, Date, Float, Integer, String, Text
 
-
-engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files_new.sqlite3")
-session = Session(engine)
-
-meta = MetaData()
+#engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files_new.sqlite3")
+#model_session = Session(engine)
+#meta = MetaData()
 Base = declarative_base()
 
 
@@ -51,8 +51,14 @@ class Person(Base):
     scene_count = Column(BigInteger, default=1)
     created_at = Column(DateTime, default=datetime.now())
     updated_at = Column(DateTime, default=datetime.now(), onupdate=datetime.now())
-    videos = relationship('Video', secondary=people_videos_association, backref='people')
+    videos = relationship('Video', secondary=people_videos_association, backref='people', lazy='subquery')
     default_tags = Column(String(120), index=True)
+    birthplace = Column(String(3), index=True, nullable=True, default=None)
+    birthdate = Column(DateTime, nullable=True, default=None)
+    ethnicity = Column(String(15), index=True, nullable=True, default=None)
+    hair_color = Column(String(10), index=True, nullable=True, default=None)
+    nationality = Column(String(20), index=True, nullable=True, default=None)
+    cupsize = Column(String(10), index=True, nullable=True, default=None)
 
     def __str__(self) -> str:
         return f"{self.name} "
@@ -69,7 +75,58 @@ class Person(Base):
     def video_count(self):
         engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
         session = Session(engine)
-        return session.query(Video).with_parent(self).count()
+        rc = session.query(Video).with_parent(self).count()
+        session.close()
+        return rc
+
+    @property
+    def personal_tags(self):
+        return self.default_tags
+
+    @personal_tags.setter
+    def personal_tags(self, tags):
+        if self.default_tags:
+            dt = self.default_tags + " " + tags
+        else:
+            dt = tags
+        dt = dt.split(',')
+        dt = list(set(dt))
+        dt.sort()
+        self.default_tags = ','.join(dt)
+
+    def get_net_data(self):
+        model_engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
+        model_session = Session(model_engine)
+        code_encoder = {'gb': 'uk', 'us': None, 'gr': 'grk', 'br': 'brz', 'co': 'col'}
+        ethn_encoder = {'black': 'b', 'asian': 'as', 'caucasian': None}
+        hair_encoder = {'blonde': 'bl', 'black': 'br', 'brown': 'br', 'red': 'rh'}
+        info = get_person_info(self.name)
+        if info:
+            if info.get('data').get('extras').get('birthplace_code'):
+                self.birthplace = info.get('data').get('extras').get('birthplace_code').lower()
+            if self.birthplace in code_encoder.keys():
+                self.birthplace = code_encoder.get(self.birthplace)
+            self.nationality = info.get('data').get('extras').get('nationality')
+            if info.get('data').get('extras').get('birthday'):
+                self.birthdate = datetime.strptime(info.get('data').get('extras').get('birthday'), "%Y-%m-%d")
+                now = datetime.now()
+                if self.birthdate < datetime(now.year-35, now.month, now.day):
+                    self.personal_tags = ',' + 'mi'
+                elif self.birthdate > datetime(now.year-20, now.month, now.day):
+                    self.personal_tags = ',' + 'y'
+            self.ethnicity = info.get('data').get('extras').get('ethnicity')
+            if self.ethnicity in ethn_encoder.keys():
+                self.personal_tags = ',' + ethn_encoder.get(self.ethnicity.lower())
+            self.hair_color = info.get('data').get('extras').get('hair_colour')
+            if self.hair_color in hair_encoder.keys():
+                self.personal_tags = ',' + hair_encoder.get(self.hair_color.lower())
+            self.cupsize = info.get('data').get('extras').get('cupsize')
+            if self.birthplace:
+                if self.birthplace != 'us':
+                    self.personal_tags = ',' + self.birthplace.lower()
+            model_session.commit()
+        model_session.close()
+        model_engine.dispose()
 
 
 class Video(Base):
@@ -98,9 +155,19 @@ class Video(Base):
             t = 'S'
         return f"{t}: {self.name} ({self.file_count})"
 
-    @classmethod
-    def get_video_name(cls, file_name: str) -> str:
-        pass
+    @property
+    def file_name(self) -> str:
+        if platform == 'win32' or platform == 'win64':
+            return self.file_name_windows
+        elif platform == 'linux':
+            return self.file_name_linux
+
+    @file_name.setter
+    def file_name(self, file_name: str) -> None:
+        if platform == 'win32' or platform == 'win64':
+            self.file_name_windows = file_name
+        elif platform == 'linux':
+            self.file_name_linux = file_name
 
     @classmethod
     def get_video_count(cls, file_name: str) -> str:
@@ -123,11 +190,12 @@ class Video(Base):
             cstr = re.search("\((\d+)\).mp4", file_name)
             if cstr:
                 count = int(cstr[1])
+                tag_str = name[1].replace(cstr[0], '').replace('(', '').replace(')', '')
             else:
                 count = 1
-            tag_str = name[1].replace(cstr[0], '').replace('(', '').replace(')', '')
-            #tags = tag_str.split(',')
-            #name = name[0]
+                tag_str = name[1].replace('.mp4', '').replace('(', '').replace(')', '')
+            # tags = tag_str.split(',')
+            # name = name[0]
             tags = [t for t in tag_str.split(',') if t.isalpha()]
             if (not 'm' in tags) and (not 's' in tags):
                 tags.append('s')
@@ -167,7 +235,7 @@ class Video(Base):
                 stream_number = stream['index']
         (new_name, new_tags, new_file_count, new_people, new_is_movie) = Video.get_video_info(file_name)
         n = Video()
-        n.name = new_name
+        n.name = new_name.strip(',')
         n.file_count = new_file_count
         n.ext = os.path.splitext(file_name)
         if platform == 'linux':
@@ -185,47 +253,50 @@ class Video(Base):
 
     @classmethod
     def name_sort(cls, new_name: str, new_tags, new_file_count: int, new_people, new_is_movie) -> str:
-        engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
-        session = Session(engine)
-
+        model_engine = db.create_engine("sqlite:///C:\\Users\\noyana\\source\\repos\\encoder\\files.sqlite3")
+        model_session = Session(model_engine)
+        new_file_count = 1
         sorted_name = ''
         if new_people:
-            people_select_str = select(Person.name, Person.scene_count).where(
+            people_select_str = select(Person.name, Person.scene_count, Person.default_tags).where(
                 Person.name.in_(new_people)).order_by(Person.scene_count.desc())
-            sorted_people = session.execute(people_select_str).fetchall()
+            sorted_people = model_session.execute(people_select_str).fetchall()
             all_list = []
-            for person in [x for x, y in sorted_people]:
-                all_list += [person.strip()]
-                if person in all_list:
-                    new_people.remove(person)
+            for person in [(x, z) for x, y, z in sorted_people]:
+                all_list += [person[0].strip()]
+                if person[1]:
+                    new_tags += person[1].split(',')
+                if person[0] in all_list:
+                    new_people.remove(person[0])
             all_list += new_people
+            new_tags = list(dict.fromkeys(new_tags))
+            new_tags.sort()
             if new_is_movie:
-                sorted_name = new_name + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
+                sorted_name = new_name + ',#(' + ','.join(new_tags) + '),(1).mp4'
             else:
-                sorted_name = ','.join(all_list) + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
+                sorted_name = ','.join(all_list) + ',#(' + ','.join(new_tags) + '),(1).mp4'
             while os.path.isfile(all_files + os.path.sep + sorted_name):
                 new_file_count += 1
                 if new_is_movie:
                     sorted_name = new_name + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
                 else:
-                    sorted_name = ','.join(all_list) + ',#(' + ','.join(new_tags) + \
-                        '),('+str(new_file_count) + ').mp4'
+                    sorted_name = ','.join(all_list) + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
         else:
             sorted_name = new_name + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
             while os.path.isfile(all_files + os.path.sep + sorted_name):
                 new_file_count += 1
                 if new_is_movie:
                     sorted_name = new_name + ',#(' + ','.join(new_tags) + '),('+str(new_file_count) + ').mp4'
-        session.close_all()
-        engine.dispose()
+        model_session.close_all()
+        model_engine.dispose()
         return sorted_name
 
-    @classmethod
+    @ classmethod
     def normalized_name(cls, file_name: str) -> str:
 
         if os.path.isfile(file_name):
             (new_name, new_tags, new_file_count, new_people, new_is_movie) = Video.get_video_info(file_name)
-        sorted_name = Video.name_sort(new_name, new_tags, new_file_count, new_people, new_is_movie)
+        sorted_name = Video.name_sort(new_name.strip(','), new_tags, new_file_count, new_people, new_is_movie)
         return sorted_name
 
 
@@ -237,8 +308,8 @@ class Tag(Base):
     description = Column(String(50), index=True)
     created_at = Column(DateTime, default=datetime.now())
     updated_at = Column(DateTime, default=datetime.now(), onupdate=datetime.now())
-    people = relationship(Person, secondary=tags_people_association, backref='tags')
-    videos = relationship(Video, secondary=tags_videos_association, backref='tags')
+    people = relationship(Person, secondary=tags_people_association, backref='tags', lazy='subquery')
+    videos = relationship(Video, secondary=tags_videos_association, backref='tags', lazy='subquery')
 
     def __init__(self, name) -> None:
         self.name = name
@@ -250,7 +321,7 @@ class Tag(Base):
     def get_file_tags_old(cls, file_name: str) -> str:
         if file_name.find('#') >= 0:
             file_name.replace(',', ', ').replace('  ', ' ')
-            return file_name[(file_name.find('#')+2):(file_name.find(']'))].replace(', ', ',').split(',')
+            return file_name[(file_name.find('#')+2): (file_name.find(']'))].replace(', ', ',').split(',')
         else:
             return ''
 
